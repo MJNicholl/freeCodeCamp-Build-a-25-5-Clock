@@ -1,0 +1,31 @@
+
+html {
+    background-color: slategray;
+}
+
+#root {
+    display: flex;
+    justify-content: center;
+    text-align: center;
+    margin-top: 50px;
+}
+
+#timer-label, #session-label, #break-label {
+    border: none;
+    padding: 10px 10px 0px 10px;
+}
+
+#break-length, #session-length, #time-left{
+    border: 2px solid black;
+    padding: 10px;
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+#break-length, #session-length {
+    margin-bottom: 20px;
+}
+
+button {
+    margin: 10px;   
+}

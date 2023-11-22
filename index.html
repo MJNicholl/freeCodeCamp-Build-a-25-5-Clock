@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Build a 25 + 5 Clock</title>
+    <link rel="stylesheet" href="style.css" />
+    
+    <!-- using babel to transpile the script
+    because the JSX part of the script is not supported by default in some browsers
+    and it throws an error saying " Uncaught SyntaxError: Unexpected token < " -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script> 
+
+    <!-- using react cdn, the first one is the core react library -->
+    <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <!-- this second one is the DOM library to render react components into the DOM -->
+    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+
+    <!-- react-redux -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-redux/8.1.3/react-redux.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        class App extends React.Component {
+            constructor(props)
+            {
+                super(props);    
+                this.state = {
+                    defaultSession: 25,
+                    defaultBreak: 5,
+                    type: SESSION,
+                    status: STOPPED,
+                    timeLeft: 25,
+                    sessionPreset: 25,
+                    breakPreset: 5
+                }
+
+                this.Reset = this.Reset.bind(this);
+                this.PlayPauseToggle = this.PlayPauseToggle.bind(this);
+                this.ChangePresetValue = this.ChangePresetValue.bind(this);
+                this.CreateCountDownTimer = this.CreateCountDownTimer.bind(this);
+                this.SetStatesToDefault = this.SetStatesToDefault.bind(this);
+                this.TimeOutSound = this.TimeOutSound.bind(this);
+            }
+
+            componentWillUnmount()
+            {
+                clearInterval(currentCountDown);
+            }
+
+            SetStatesToDefault()
+            {
+                this.setState({"defaultSession": 25});
+                this.setState({"defaultBreak": 5});
+                this.setState({"type": SESSION});
+                this.setState({"status": STOPPED});
+                this.setState({"timeLeft": 25});
+                this.setState({"sessionPreset": 25});
+                this.setState({"breakPreset": 5});
+            }
+
+            Reset()
+            {
+                clearInterval(currentCountDown);
+                this.setState({"type": SESSION});
+                this.setState({"status": STOPPED});
+                this.setState({"sessionPreset": this.state.defaultSession});
+                this.setState({"breakPreset": this.state.defaultBreak});
+                this.setState({"timeLeft": this.state.defaultSession});
+                if(audio != null)
+                {
+                    this.ResetAudio();
+                }
+            }
+            
+            ChangePresetValue()
+            {
+                if(this.state.status != RUNNING)
+                {
+                    switch(event.target.id)
+                    {
+                        case "break-decrement":
+                            if(this.state.breakPreset > lowerPresetLimit)
+                            {
+                                this.setState({"breakPreset": this.state.breakPreset - presetStep});
+                            }
+                            break;
+                        case "break-increment":
+                            if(this.state.breakPreset < upperPresetLimit)
+                            {
+                                this.setState({"breakPreset": this.state.breakPreset + presetStep});
+                            }
+                            break;
+                        case "session-decrement":
+                            if(this.state.sessionPreset > lowerPresetLimit)
+                            {
+                                let newTime = this.state.sessionPreset - presetStep;
+                                this.setState({"sessionPreset": newTime});
+                                this.setState({"timeLeft": newTime});
+                            }
+                            break;
+                        case "session-increment":
+                            if(this.state.sessionPreset < upperPresetLimit)
+                            {
+                                let newTime = this.state.sessionPreset + presetStep;
+                                this.setState({"sessionPreset": newTime});
+                                this.setState({"timeLeft": newTime});
+                            }
+                            break;
+                    }
+                }
+            }
+
+            PlayPauseToggle()
+            {
+                if(this.state.status == PAUSED || this.state.status == STOPPED)
+                {
+                    this.setState({"status": RUNNING});
+                    this.CreateCountDownTimer(this.state.timeLeft);
+                }
+                else
+                {
+                    this.setState({"status": PAUSED});
+                    clearInterval(currentCountDown);
+                }
+            }
+
+            CreateCountDownTimer(timeSet, looping = false)
+            {
+                timeSet *= maxMili * maxMinutes;
+                // Set the time being counted down to, and add the delay for the first time setInterval takes to run
+                let countDownTime = new Date().getTime() + timeSet;
+                if(this.state.status == STOPPED || looping)
+                {
+                    countDownTime += maxMili;
+                }
+
+                // store a reference to the App object so the setInterval can call the App's methods
+                thisApp = this;
+                
+                currentCountDown = setInterval(function() {
+                    // Get current time
+                    let currentTime = new Date().getTime();
+        
+                    // Find the currentTimeLeft between now and the count down date
+                    let currentTimeLeft = countDownTime - currentTime;
+                    if(currentTimeLeft < 0)
+                    {
+                        currentTimeLeft = 0;
+                    }
+                    
+                    // update the clock
+                    // If the count down is finished, write some text
+                    if (FormatTime(currentTimeLeft, REVERSE) > 0)
+                    {                        
+                        thisApp.setState({"timeLeft": FormatTime(currentTimeLeft, REVERSE)});
+
+                        // the FormatTime uses math.floor which allows this part to run
+                        if(FormatTime(currentTimeLeft) == "00:00")
+                        {
+                            // make a sound
+                            thisApp.TimeOutSound();
+                        }
+                    }
+                    else
+                    {
+                        clearInterval(currentCountDown);
+                        
+                        let currentType = thisApp.state.type;
+                        thisApp.setState({"type": ((currentType == SESSION) ? BREAK : SESSION)});
+                        
+                        // show new value on screen
+                        let newCountdownValue = (thisApp.state.type == SESSION) ? thisApp.state.sessionPreset : thisApp.state.breakPreset;
+                        thisApp.setState({"timeLeft": newCountdownValue});
+
+                        // create a loop by starting a new timer
+                        thisApp.CreateCountDownTimer(newCountdownValue, true);
+                    }
+
+                }, timerStep);
+            }
+
+            ResetAudio()
+            {
+                if(audio != null)
+                {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }
+            }
+
+            TimeOutSound()
+            {
+                if(audio == null)
+                {
+                    audio = document.getElementById("beep");
+                }
+                // setting another if instead of else so that it runs the
+                //audio.play() part the first time this method is called
+                if(audio != null)
+                {
+                    this.ResetAudio();
+                    audio.play();
+                }
+            }
+
+            TimeLeft()
+            {
+                return (this.state.timeLeft == 60) ? ("60:00") : FormatTime(this.state.timeLeft * maxMili * maxMinutes);
+            }
+
+
+            render()
+            {
+                return (
+                    <div>
+                        <div id="break-label">Break Length</div>
+                        <button id="break-decrement" onClick={() => this.ChangePresetValue()}>- break</button>
+                        <button id="break-increment" onClick={() => this.ChangePresetValue()}>+ break</button>
+                        <div id="break-length">{this.state.breakPreset}</div>
+                        
+                        <div id="session-label">Session Length</div>
+                        <button id="session-decrement" onClick={() => this.ChangePresetValue()}>- session</button>
+                        <button id="session-increment" onClick={() => this.ChangePresetValue()}>+ session</button>
+                        <div id="session-length">{this.state.sessionPreset}</div>
+                        
+                        <div id="timer-label">{(this.state.type == BREAK) ? BREAK : SESSION }</div>
+                        <div id="time-left">{this.TimeLeft()}</div>
+                        <button id="start_stop" onClick={() => this.PlayPauseToggle()}>start / stop</button>
+                        <button id="reset" onClick={() => this.Reset()}>reset</button>
+
+                        <AudioPiece />
+
+                    </div>
+                );
+            }
+        }
+
+        class AudioPiece extends React.Component
+        {
+            constructor(props)
+            {
+                super(props)
+
+                this.state = {
+                    src: "timeout.mp3",
+                    id: "beep"
+                }
+            }
+
+            componentDidMount()
+            {
+                audio = document.getElementById("beep");
+            }
+            
+            componentWillUnmount()
+            {
+                audio = null;
+            }
+
+            render()
+            {
+                return (
+                    <audio src={this.state.src} id={this.state.id} />
+                )
+            }
+        }
+
+        // time constants
+        const maxMinutes = 60;
+        const maxSeconds = 60;
+        const maxMili = 1000;
+        const maxMiliSeconds = maxMili * maxSeconds;
+        const timerStep = 1000;
+
+        // time format modes
+        const REVERSE = "REVERSE";
+        const DEFAULT = "DEFAULT";
+
+        // timer preset constants
+        const lowerPresetLimit = 1;
+        const upperPresetLimit = 60;
+        const presetStep = 1;
+
+        // timer status variants
+        const STOPPED = "STOPPED";
+        const PAUSED = "PAUSED";
+        const RUNNING = "RUNNING";
+
+        // timer type variants
+        const SESSION = "SESSION";
+        const BREAK = "BREAK";
+
+        let currentCountDown;
+
+        let thisApp;
+
+        let audio;
+
+        function FormatTime(valueToFormat, mode = DEFAULT)
+        {
+            let result;
+
+            // Time calculations for minutes and seconds
+            let minutes;
+            let seconds;
+            if(mode != REVERSE)
+            {
+                minutes = Math.floor((valueToFormat % (maxMiliSeconds * maxMinutes)) / (maxMiliSeconds));
+                seconds = Math.floor((valueToFormat % (maxMiliSeconds)) / maxMili);
+            }
+
+            switch(mode)
+            {
+                case REVERSE:
+                    result = valueToFormat / (maxMili * maxMinutes);
+                    break;
+                case DEFAULT:
+                    result = ((minutes < 10) ? "0" + minutes : minutes) + ":" + ((seconds < 10) ? "0" + seconds : seconds);
+                    break;
+            }
+
+            return result
+        }
+
+        ReactDOM.render(<App/>, document.getElementById("root"));
+
+    </script>
+
+    <script src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"></script>
+
+</body>
+</html>
